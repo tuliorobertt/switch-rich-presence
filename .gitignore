@@ -1,0 +1,13 @@
+.toolchain/
+__pycache__/
+build/
+dist/
+*.elf
+*.nro
+*.nso
+*.npdm
+*.nsp
+*.nacp
+*.map
+*.zip
+.venv/
