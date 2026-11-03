@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <switch.h>
+#include "ui.h"
 
 #define CONFIG_PATH "sdmc:/config/switch-richpresence.ini"
 #define TEMP_PATH "sdmc:/config/switch-richpresence.ini.tmp"
@@ -21,7 +22,7 @@
 typedef struct { char host[64]; unsigned port; bool enabled; } Config;
 static Config cfg = {.host = "192.168.1.2", .port = 39421, .enabled = true};
 static char notice[160] = "Configure o IP do PC e salve.";
-static bool dirty, sockets_ready, nifm_ready;
+static bool dirty, sockets_ready, nifm_ready, graphical_ui;
 
 static bool prompt(const char *guide, const char *initial, char *out, size_t size, u32 max_len) {
     SwkbdConfig kbd;
@@ -169,7 +170,7 @@ static void local_ip(char *out, size_t size) {
     if (!inet_ntop(AF_INET, &address, out, size)) snprintf(out, size, "indisponivel");
 }
 
-static void draw(int selected) {
+static void draw_console(int selected) {
     char module_status[160], ip[32];
     read_status(module_status, sizeof(module_status));
     local_ip(ip, sizeof(ip));
@@ -190,9 +191,21 @@ static void draw(int selected) {
     printf("  Inicio automatico requer reiniciar o console.\n");
 }
 
+static void draw(int selected) {
+    if (!graphical_ui) { draw_console(selected); consoleUpdate(NULL); return; }
+    char module_status[160], ip[32];
+    read_status(module_status, sizeof(module_status));
+    local_ip(ip, sizeof(ip));
+    UiState state = { .host = cfg.host, .port = cfg.port, .enabled = cfg.enabled,
+                      .autostart = autostart_enabled(), .dirty = dirty, .ip = ip,
+                      .module_status = module_status, .notice = notice, .selected = selected };
+    ui_draw(&state);
+}
+
 int main(int argc, char **argv) {
     (void)argc; (void)argv;
-    consoleInit(NULL);
+    graphical_ui = ui_init();
+    if (!graphical_ui) consoleInit(NULL);
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     PadState pad;
     padInitializeDefault(&pad);
@@ -203,8 +216,8 @@ int main(int argc, char **argv) {
         padUpdate(&pad);
         u64 down = padGetButtonsDown(&pad);
         if (down & HidNpadButton_Minus) break;
-        if (down & HidNpadButton_Up) selected = (selected + 4) % 5;
-        if (down & HidNpadButton_Down) selected = (selected + 1) % 5;
+        if (down & HidNpadButton_AnyUp) selected = (selected + 4) % 5;
+        if (down & HidNpadButton_AnyDown) selected = (selected + 1) % 5;
         if (down & HidNpadButton_Plus) save_config();
         if (down & HidNpadButton_A) {
             if (selected == 0) {
@@ -228,16 +241,17 @@ int main(int argc, char **argv) {
                 snprintf(notice, sizeof(notice), "Pressione + para aplicar a mudanca.");
             } else if (selected == 3) {
                 snprintf(notice, sizeof(notice), "Testando conexao com o PC...");
-                draw(selected); consoleUpdate(NULL);
+                draw(selected);
                 test_connection();
             } else toggle_autostart();
         }
         if (down || frame++ % 60 == 0) draw(selected);
-        consoleUpdate(NULL);
+        svcSleepThread(16666667ULL);
     }
     if (nifm_ready) nifmExit();
     if (sockets_ready) socketExit();
-    consoleExit(NULL);
+    if (graphical_ui) ui_exit();
+    else consoleExit(NULL);
     return 0;
 }
 

@@ -258,6 +258,8 @@ def main(argv=None, stop_event=None, log=None) -> int:
                         started = int(time.time()) if event else 0
                         next_retry = 0
                         print(f"Switch {source[0]}: {event[0] if event else 'presença pausada'}", flush=True)
+                        if event and event[2] and event[2] not in names:
+                            print(f"Jogo não encontrado no catálogo; Title ID: {event[2]}", flush=True)
             except socket.timeout:
                 pass
             now = time.monotonic()

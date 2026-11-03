@@ -13,6 +13,8 @@ A porta do roteador não precisa ser encaminhada para uso na rede local. O proto
 
 O sysmodule inicia automaticamente via `boot2.flag`. Se houver falha ao iniciar o Atmosphère, remova do SD a pasta `atmosphere/contents/4200000000075250`. Para desativar somente o início automático, remova o arquivo `flags/boot2.flag` dessa pasta. O NRO também pode alterar essa opção; reinicie para aplicar.
 
+Na interface do NRO, use o direcional para navegar e **A** para selecionar, **+** para salvar a configuração e **-** para sair. O início automático é aplicado após reiniciar o console. Se a interface gráfica não puder ser inicializada, o aplicativo tenta abrir em modo de texto. O desenho da interface usa a fonte do próprio Switch e a biblioteca [stb_truetype](https://github.com/nothings/stb), cuja licença acompanha o arquivo-fonte em `source/vendor`.
+
 ## Companion
 
 A tela inicial mostra o IP do PC, a atividade recebida e o estado do Discord. Em **Atividade**, veja o histórico e os erros. Em **Configurações**, escolha iniciar com o Windows e minimizar para a bandeja. Quando ambas estiverem ativas, o aplicativo inicia oculto na bandeja; clique no ícone para abri-lo ou sair. Ao minimizar, a janela também vai para a bandeja. Fechar a janela encerra o aplicativo.
@@ -23,7 +25,9 @@ Após 210 segundos sem eventos do Switch, a atividade é removida. Com o jogo fe
 
 ## Fontes de nomes e imagens
 
-`games.json` combina dados de [Switch Games JSON](https://github.com/Producdevity/switch-games-json), [switch-cheat](https://github.com/ibnux/switch-cheat/blob/master/GAMES.md) e [Eden](https://github.com/liugh-dev/eden-emu/blob/master/dist/compatibility_list/compatibility_list.json). `game-icons.json` relaciona IDs a URLs públicas de ícones do [TitleDB](https://github.com/blawar/titledb). Jogos ausentes usam Title ID ou logo padrão. A disponibilidade das imagens depende dos servidores externos e do Discord.
+`games.json` combina dados de [Switch Games JSON](https://github.com/Producdevity/switch-games-json), [switch-cheat](https://github.com/ibnux/switch-cheat/blob/master/GAMES.md), [Eden](https://github.com/liugh-dev/eden-emu/blob/master/dist/compatibility_list/compatibility_list.json) e das bases regionais do [TitleDB](https://github.com/blawar/titledb). `game-icons.json` relaciona IDs a URLs públicas de ícones do TitleDB. Jogos ausentes usam Title ID ou logo padrão, e o ID é exibido na tela Atividade. A disponibilidade das imagens depende dos servidores externos e do Discord.
+
+Para atualizar os catálogos do código-fonte, execute `python scripts/update_catalog.py` com acesso à internet. O script acrescenta nomes e imagens de Brasil, Estados Unidos, Reino Unido e Japão sem sobrescrever entradas existentes. Depois, recompile o aplicativo Windows para incluir os catálogos atualizados. A cobertura depende das fontes e não garante identificação de todos os títulos ou edições.
 
 ## Desenvolvimento e compilação
 
