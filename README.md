@@ -1,5 +1,7 @@
 ﻿# Switch Rich Presence
 
+Pesquisa em andamento nesta branch: [presença sem computador](research/standalone.md). O experimento é separado da versão existente e ainda não publica presença diretamente.
+
 Sysmodule para Nintendo Switch com Atmosphère que detecta o jogo aberto e envia o estado ao companion para Windows. O companion publica a atividade no Discord Desktop. O sysmodule e a comunicação com o PC foram testados em um Switch com firmware 22.5.0 e Atmosphère 1.11.2 CNX; outros ambientes podem exigir ajustes.
 
 ## Instalação
