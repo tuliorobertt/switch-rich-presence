@@ -154,7 +154,7 @@ void ui_draw(const UiState *s) {
     text(48, 157, 19, white, "Configuração", 450);
     text(48, 184, 15, muted, "Selecione uma opção e pressione A.", 550);
     char port[16]; snprintf(port, sizeof(port), "%u", s->port);
-    field_row(215, "IP do computador", s->host, "Endereço exibido no companion", s->selected == 0, red);
+    field_row(215, "IP do computador", s->host, "auto ou IP manual | X: busca automatica", s->selected == 0, red);
     field_row(291, "Porta UDP", port, "Deve ser igual à porta do PC", s->selected == 1, blue);
     field_row(367, "Compartilhar presença", s->enabled ? "ATIVADA" : "PAUSADA", "Exibir sua atividade no Discord", s->selected == 2, green);
     field_row(443, "Testar conexão", "TESTAR  >", "Verifica a comunicação com o companion", s->selected == 3, blue);
@@ -177,7 +177,7 @@ void ui_draw(const UiState *s) {
 
     round_rect(48, 609, 1180, 48, 13, C(22, 33, 58));
     text(67, 624, 16, white, s->notice, 1130);
-    text(49, 678, 15, muted, "DIRECIONAL / ANALÓGICO  navegar     A  selecionar     +  salvar     -  sair", 1120);
+    text(49, 678, 15, muted, "DIRECIONAL  navegar    A  selecionar    X  automático    +  salvar    -  sair", 1120);
     framebufferEnd(&fb);
 }
 

@@ -243,7 +243,8 @@ def main(argv=None, stop_event=None, log=None) -> int:
                         if isinstance(nonce, str) and len(nonce) == 16 and all(c in "0123456789ABCDEF" for c in nonce):
                             try:
                                 sock.sendto(f'{{"type":"pong","nonce":"{nonce}"}}'.encode("ascii"), source)
-                                print(f"Teste de conexão recebido de {source[0]}:{source[1]}; resposta enviada.", flush=True)
+                                if probe.get("discovery") is not True:
+                                    print(f"Teste de conexão recebido de {source[0]}:{source[1]}; resposta enviada.", flush=True)
                             except OSError as exc:
                                 print(f"Falha ao responder teste de {source[0]}: {exc}", file=sys.stderr, flush=True)
                         continue

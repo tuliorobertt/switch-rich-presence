@@ -2,9 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <switch.h>
+#include "../../source/discovery.h"
 
 #define CONFIG_PATH "sdmc:/config/switch-richpresence.ini"
 #define STATUS_PATH "sdmc:/config/switch-richpresence.status"
@@ -42,9 +44,9 @@ static void status(const char *message) {
 }
 
 static bool load_config(Config *out) {
-    Config cfg = {.port = 39421, .enabled = true};
+    Config cfg = {.host = "auto", .port = 39421, .enabled = true};
     FILE *f = fopen(CONFIG_PATH, "r");
-    if (!f) return false;
+    if (!f) { *out = cfg; return true; }
     char line[160];
     while (fgets(line, sizeof(line), f)) {
         char *comment = strchr(line, '#');
@@ -72,7 +74,7 @@ static bool load_config(Config *out) {
     }
     fclose(f);
     struct in_addr address;
-    if (inet_pton(AF_INET, cfg.host, &address) != 1 || address.s_addr == INADDR_ANY) return false;
+    if (strcmp(cfg.host, "auto") && (inet_pton(AF_INET, cfg.host, &address) != 1 || address.s_addr == INADDR_ANY)) return false;
     *out = cfg;
     return true;
 }
@@ -112,6 +114,8 @@ static bool network_start(Network *n) {
     n->socket_ready = true;
     n->fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (n->fd < 0) { status("Erro: criar socket UDP"); network_close(n); return false; }
+    int broadcast = 1;
+    if (setsockopt(n->fd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) != 0) { status("Erro: habilitar busca na rede"); network_close(n); return false; }
     rc = nifmInitialize(NifmServiceType_User);
     if (R_FAILED(rc)) { status("Erro: inicializar NIFM"); network_close(n); return false; }
     n->nifm_ready = true;
@@ -122,6 +126,32 @@ static bool network_start(Network *n) {
     if (R_FAILED(rc)) { status("Erro: solicitar rede"); network_close(n); return false; }
     status("Aguardando rede NIFM");
     return true;
+}
+
+/* A ping response proves that a companion currently listens at this address.
+   UDP is unauthenticated; discovery is only suitable for trusted LANs. */
+static void discovery_send(Network *n, unsigned port, u64 nonce, bool sweep, const char *known_host) {
+    char packet[112];
+    int len = snprintf(packet, sizeof(packet), "{\"type\":\"ping\",\"nonce\":\"%016llX\",\"discovery\":true}", (unsigned long long)nonce);
+    if (known_host[0]) {
+        struct sockaddr_in dst = {0}; dst.sin_family = AF_INET; dst.sin_port = htons((u16)port);
+        if (inet_pton(AF_INET, known_host, &dst.sin_addr) == 1)
+            sendto(n->fd, packet, len, 0, (struct sockaddr *)&dst, sizeof(dst));
+        return;
+    }
+    discovery_send_candidates(n->fd, port, packet, len, sweep);
+}
+
+static bool discovery_receive(Network *n, unsigned port, u64 nonce, char *host, size_t host_size) {
+    fd_set set; FD_ZERO(&set); FD_SET(n->fd, &set); struct timeval timeout = {0};
+    if (select(n->fd+1, &set, NULL, NULL, &timeout) <= 0) return false;
+    struct sockaddr_in from = {0}; socklen_t from_len = sizeof(from); char reply[128], expected[96];
+    ssize_t len = recvfrom(n->fd, reply, sizeof(reply)-1, 0, (struct sockaddr *)&from, &from_len);
+    if (len <= 0) return false;
+    reply[len] = 0;
+    snprintf(expected, sizeof(expected), "{\"type\":\"pong\",\"nonce\":\"%016llX\"}", (unsigned long long)nonce);
+    if (from.sin_family != AF_INET || from.sin_port != htons((u16)port) || strcmp(reply, expected)) return false;
+    return inet_ntop(AF_INET, &from.sin_addr, host, host_size) != NULL;
 }
 
 static bool send_event(Network *n, const Config *cfg, u64 title_id, bool paused) {
@@ -144,6 +174,8 @@ int main(int argc, char **argv) {
     Config active = {0};
     bool have_config = false, shell_ready = false, info_ready = false;
     u64 last_title = UINT64_MAX, last_send_tick = 0;
+    u64 discovery_tick = 0, discovery_nonce = 0, last_reply = 0, sweep_tick = 0;
+    char found_host[64] = {0};
 
     while (true) {
         Config current;
@@ -160,6 +192,7 @@ int main(int argc, char **argv) {
             have_config = true;
             last_title = UINT64_MAX;
             last_send_tick = 0;
+            found_host[0] = 0; discovery_tick = last_reply = sweep_tick = 0;
         }
         if (!active.enabled) {
             if (net.socket_ready) network_close(&net);
@@ -204,6 +237,29 @@ int main(int argc, char **argv) {
             }
             net.registered = true;
             last_send_tick = 0;
+            found_host[0] = 0; discovery_tick = last_reply = sweep_tick = 0;
+        }
+        u64 now = armGetSystemTick();
+        Config destination = active;
+        if (!strcmp(active.host, "auto")) {
+            char reply_host[64];
+            if (discovery_tick && discovery_receive(&net, active.port, discovery_nonce, reply_host, sizeof(reply_host))) {
+                if (!found_host[0] || !strcmp(found_host, reply_host)) {
+                    if (strcmp(found_host, reply_host)) { snprintf(found_host, sizeof(found_host), "%s", reply_host); last_send_tick = 0; }
+                    last_reply = now;
+                }
+            }
+            if (found_host[0] && last_reply && armTicksToNs(now-last_reply) > 30000000000ULL) {
+                found_host[0] = 0; last_reply = 0; last_send_tick = 0;
+            }
+            if (!discovery_tick || armTicksToNs(now-discovery_tick) >= 10000000000ULL) {
+                discovery_nonce = armGetSystemTick(); discovery_tick = now;
+                bool sweep = !found_host[0] && (!sweep_tick || armTicksToNs(now-sweep_tick) >= 60000000000ULL);
+                if (sweep) sweep_tick = now;
+                discovery_send(&net, active.port, discovery_nonce, sweep, found_host);
+            }
+            if (!found_host[0]) { status("Procurando companion na rede local"); svcSleepThread(2000000000ULL); continue; }
+            snprintf(destination.host, sizeof(destination.host), "%s", found_host);
         }
         u64 pid = 0, program_id = 0, title_id = 0;
         Result rc = pmshellGetApplicationProcessIdForShell(&pid);
@@ -226,13 +282,12 @@ int main(int argc, char **argv) {
             }
             title_id = program_id & ~0xFFFULL;
         }
-        u64 now = armGetSystemTick();
         if (title_id != last_title || !last_send_tick || armTicksToNs(now - last_send_tick) >= HEARTBEAT_SECONDS * 1000000000ULL) {
-            if (send_event(&net, &active, title_id, false)) {
+            if (send_event(&net, &destination, title_id, false)) {
                 last_title = title_id;
                 last_send_tick = now;
                 char message[160];
-                snprintf(message, sizeof(message), "UDP enviado: %016llX para %s:%u", (unsigned long long)title_id, active.host, active.port);
+                snprintf(message, sizeof(message), "UDP enviado: %016llX para %s:%u", (unsigned long long)title_id, destination.host, destination.port);
                 status(message);
             } else status("Erro: enviar UDP; tentando novamente");
         }

@@ -5,7 +5,7 @@ endif
 
 export APP_TITLE := Switch Rich Presence
 export APP_AUTHOR := tuliorobert
-export APP_VERSION := 1.0.0
+export APP_VERSION := 1.1.0
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 

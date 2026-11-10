@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <switch.h>
 #include "ui.h"
+#include "discovery.h"
 
 #define CONFIG_PATH "sdmc:/config/switch-richpresence.ini"
 #define TEMP_PATH "sdmc:/config/switch-richpresence.ini.tmp"
@@ -20,8 +21,8 @@
 #define BOOT_FLAG MODULE_FLAGS "/boot2.flag"
 
 typedef struct { char host[64]; unsigned port; bool enabled; } Config;
-static Config cfg = {.host = "192.168.1.2", .port = 39421, .enabled = true};
-static char notice[160] = "Configure o IP do PC e salve.";
+static Config cfg = {.host = "auto", .port = 39421, .enabled = true};
+static char notice[160] = "Use busca automatica ou configure o IP.";
 static bool dirty, sockets_ready, nifm_ready, graphical_ui;
 
 static bool prompt(const char *guide, const char *initial, char *out, size_t size, u32 max_len) {
@@ -38,7 +39,7 @@ static bool prompt(const char *guide, const char *initial, char *out, size_t siz
 
 static bool valid_host(const char *host) {
     struct in_addr address;
-    return inet_pton(AF_INET, host, &address) == 1 && address.s_addr != INADDR_ANY;
+    return !strcmp(host, "auto") || (inet_pton(AF_INET, host, &address) == 1 && address.s_addr != INADDR_ANY);
 }
 
 static void load_config(void) {
@@ -128,12 +129,20 @@ static void test_connection(void) {
     struct sockaddr_in dst = {0}, from = {0};
     dst.sin_family = AF_INET;
     dst.sin_port = htons((uint16_t)cfg.port);
-    inet_pton(AF_INET, cfg.host, &dst.sin_addr);
+    bool automatic = !strcmp(cfg.host, "auto");
+    if (automatic) {
+        int yes = 1;
+        if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes)) != 0) {
+            snprintf(notice, sizeof(notice), "Erro ao iniciar busca automatica."); close(fd); socketExit(); sockets_ready = false; return;
+        }
+        dst.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    } else inet_pton(AF_INET, cfg.host, &dst.sin_addr);
     unsigned long long nonce = (unsigned long long)armGetSystemTick();
     char packet[100], expected[100], reply[128];
-    snprintf(packet, sizeof(packet), "{\"type\":\"ping\",\"nonce\":\"%016llX\"}", nonce);
+    snprintf(packet, sizeof(packet), automatic ? "{\"type\":\"ping\",\"nonce\":\"%016llX\",\"discovery\":true}" : "{\"type\":\"ping\",\"nonce\":\"%016llX\"}", nonce);
     snprintf(expected, sizeof(expected), "{\"type\":\"pong\",\"nonce\":\"%016llX\"}", nonce);
-    if (sendto(fd, packet, strlen(packet), 0, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
+    if (automatic) discovery_send_candidates(fd, cfg.port, packet, strlen(packet), true);
+    else if (sendto(fd, packet, strlen(packet), 0, (struct sockaddr *)&dst, sizeof(dst)) < 0) {
         snprintf(notice, sizeof(notice), "Falha ao enviar teste UDP (%d).", errno);
         close(fd);
         socketExit(); sockets_ready = false;
@@ -146,7 +155,7 @@ static void test_connection(void) {
     socklen_t from_len = sizeof(from);
     ssize_t received = selected > 0 ? recvfrom(fd, reply, sizeof(reply) - 1, 0, (struct sockaddr *)&from, &from_len) : -1;
     if (received >= 0) reply[received] = 0;
-    if (received > 0 && from.sin_addr.s_addr == dst.sin_addr.s_addr && from.sin_port == dst.sin_port && !strcmp(reply, expected))
+    if (received > 0 && (automatic || from.sin_addr.s_addr == dst.sin_addr.s_addr) && from.sin_port == dst.sin_port && !strcmp(reply, expected))
         snprintf(notice, sizeof(notice), "Conexao OK: companion respondeu. Discord nao foi testado.");
     else
         snprintf(notice, sizeof(notice), "Sem resposta. Confira IP, companion e firewall UDP.");
@@ -186,7 +195,7 @@ static void draw_console(int selected) {
     printf("\n  IP do Switch: %s\n", ip);
     printf("  Ultimo estado do sysmodule (pode ser antigo):\n  %s\n", module_status);
     printf("\n  %s%s\n", dirty ? "[NAO SALVO] " : "", notice);
-    printf("\n  Direcional: selecionar   A: editar/acionar\n  +: salvar   -: sair\n");
+    printf("\n  Direcional: selecionar   A: editar/acionar\n  X: busca automatica   +: salvar   -: sair\n");
     printf("  Salve para aplicar IP, porta e presenca.\n");
     printf("  Inicio automatico requer reiniciar o console.\n");
 }
@@ -219,10 +228,11 @@ int main(int argc, char **argv) {
         if (down & HidNpadButton_AnyUp) selected = (selected + 4) % 5;
         if (down & HidNpadButton_AnyDown) selected = (selected + 1) % 5;
         if (down & HidNpadButton_Plus) save_config();
+        if (down & HidNpadButton_X) { snprintf(cfg.host, sizeof(cfg.host), "auto"); dirty = true; save_config(); }
         if (down & HidNpadButton_A) {
             if (selected == 0) {
                 char input[64] = "";
-                if (prompt("IPv4 do PC, ex: 192.168.1.42", cfg.host, input, sizeof(input), 15)) {
+                if (prompt("IP do PC ou auto", cfg.host, input, sizeof(input), 15)) {
                     if (valid_host(input)) { snprintf(cfg.host, sizeof(cfg.host), "%s", input); dirty = true; snprintf(notice, sizeof(notice), "IP alterado. Pressione + para salvar."); }
                     else snprintf(notice, sizeof(notice), "IPv4 invalido.");
                 }

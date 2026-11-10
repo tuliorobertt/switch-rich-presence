@@ -6,10 +6,10 @@ Sysmodule para Nintendo Switch com Atmosphère que detecta o jogo aberto e envia
 
 1. No PC, extraia o pacote Windows e abra `SwitchRichPresence.exe`. Mantenha a pasta `_internal` junto ao executável. Abra também o Discord Desktop e permita o compartilhamento de atividade nas configurações do Discord.
 2. Extraia o pacote Switch na raiz do cartão SD, mesclando as pastas `atmosphere`, `config` e `switch`. Reinicie o console no Atmosphère.
-3. No NRO Switch Rich Presence, configure o IP do PC mostrado na tela inicial do companion, confirme a porta UDP `39421` e pressione **+** para salvar. Switch e PC devem estar na mesma rede. Se solicitado, permita o aplicativo no Firewall do Windows para redes privadas.
+3. No NRO Switch Rich Presence, pressione **X** para ativar e salvar a busca automática do companion. Confirme que a porta UDP é a mesma do PC (por padrão `39421`). Switch e PC devem estar na mesma rede. Se solicitado, permita o aplicativo no Firewall do Windows para redes privadas.
 4. Selecione **Testar conexão**. A interface do PC registra o teste. Abra um jogo e verifique o Discord.
 
-A porta do roteador não precisa ser encaminhada para uso na rede local. O protocolo UDP não autentica dispositivos; use-o em uma rede local confiável. O teste do NRO verifica apenas a conexão com o companion, não com o Discord.
+A busca continua em segundo plano pelo sysmodule e tenta novamente quando o computador muda de rede ou fica indisponível. Ela envia broadcast e, se necessário, procura endereços individuais na sub-rede local, limitada a até 254 endereços. Pode demorar até cerca de 30 segundos para abandonar um companion que parou de responder e até 60 segundos entre varreduras completas. Redes de convidados, isolamento entre clientes ou firewall ainda podem bloquear a busca; nesse caso configure manualmente o IP do PC no NRO. Se houver mais de um companion, o primeiro que responder será escolhido e mantido enquanto responder. A porta do roteador não precisa ser encaminhada para uso na rede local. O protocolo UDP e a descoberta não autenticam dispositivos; use-os em uma rede local confiável. O teste do NRO verifica apenas a conexão com o companion, não com o Discord.
 
 O sysmodule inicia automaticamente via `boot2.flag`. Se houver falha ao iniciar o Atmosphère, remova do SD a pasta `atmosphere/contents/4200000000075250`. Para desativar somente o início automático, remova o arquivo `flags/boot2.flag` dessa pasta. O NRO também pode alterar essa opção; reinicie para aplicar.
 
