@@ -10,7 +10,10 @@ import tempfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCES = ("BR.pt.json", "US.en.json", "GB.en.json", "JP.ja.json")
+# Order matters: earlier regions win. Asian and European catalogs cover
+# releases (and Title IDs) that never shipped in the Americas.
+SOURCES = ("BR.pt.json", "US.en.json", "GB.en.json", "JP.ja.json",
+           "HK.zh.json", "KR.ko.json", "DE.de.json", "FR.fr.json")
 BASE_URL = "https://raw.githubusercontent.com/blawar/titledb/master/"
 
 
@@ -65,6 +68,13 @@ def main():
             if isinstance(icon, str) and icon.startswith("https://img-eshop.cdn.nintendo.net/"):
                 icons.setdefault(tid, icon)
         print(f"  {len(names)} nomes; {len(icons)} imagens", flush=True)
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from companion import IconResolver
+    resolver = IconResolver(names, icons)
+    shared = sum(1 for tid, name in names.items() if tid not in icons and resolver.lookup(tid, name)[0])
+    print(f"  {len(names) - len(icons)} jogos sem imagem própria; {shared} usarão a imagem de outra "
+          "região ou edição pelo nome (resolvido pelo companion).", flush=True)
     write_map("games.json", names)
     write_map("game-icons.json", icons)
     print(f"Concluído: +{len(names)-old_names} nomes; +{len(icons)-old_icons} imagens.")

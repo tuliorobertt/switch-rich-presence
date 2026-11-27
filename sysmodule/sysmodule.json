@@ -12,7 +12,7 @@
   "is_64_bit": true,
   "address_space_type": 1,
   "filesystem_access": { "permissions": "0x0000000000200000" },
-  "service_access": ["set:sys", "pm:shell", "pm:info", "nifm:u", "bsd:u", "fsp-srv"],
+  "service_access": ["set:sys", "pm:shell", "pm:info", "nifm:u", "bsd:u", "fsp-srv", "ns:am2"],
   "service_host": [],
   "kernel_capabilities": [
     { "type": "kernel_flags", "value": { "highest_thread_priority": 63, "lowest_thread_priority": 24, "lowest_cpu_id": 3, "highest_cpu_id": 3 } },

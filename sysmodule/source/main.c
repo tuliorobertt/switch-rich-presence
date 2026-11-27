@@ -35,12 +35,16 @@ void __appExit(void) { smExit(); }
 typedef struct { char host[64]; unsigned port; bool enabled; } Config;
 typedef struct { int fd; bool socket_ready, nifm_ready, request_open, registered; NifmRequest request; } Network;
 
+static char status_game[384];
+
+/* Line 1: human readable state. Line 2: name of the running game (may be empty). */
 static void status(const char *message) {
-    static char previous[160];
-    if (!strcmp(previous, message)) return;
+    static char previous[160], previous_game[384];
+    if (!strcmp(previous, message) && !strcmp(previous_game, status_game)) return;
     snprintf(previous, sizeof(previous), "%s", message);
+    snprintf(previous_game, sizeof(previous_game), "%s", status_game);
     FILE *f = fopen(STATUS_PATH, "w");
-    if (f) { fprintf(f, "%s\n", message); fclose(f); }
+    if (f) { fprintf(f, "%s\n%s\n", message, status_game); fclose(f); }
 }
 
 static bool load_config(Config *out) {
@@ -154,14 +158,58 @@ static bool discovery_receive(Network *n, unsigned port, u64 nonce, char *host, 
     return inet_ntop(AF_INET, &from.sin_addr, host, host_size) != NULL;
 }
 
-static bool send_event(Network *n, const Config *cfg, u64 title_id, bool paused) {
+/* Reads the game name from the console (control.nacp). This covers titles
+   missing from the PC catalogs. ns:am2 is opened only while a title changes. */
+static void read_title_name(u64 title_id, char *out, size_t size) {
+    static NsApplicationControlData control;
+    out[0] = 0;
+    if (!title_id || R_FAILED(nsInitialize())) return;
+    u64 actual = 0;
+    Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage, title_id, &control, sizeof(control), &actual);
+    nsExit();
+    if (R_FAILED(rc) || actual < sizeof(control.nacp)) return;
+    /* English names match the PC catalogs best; otherwise use the first one. */
+    const char *name = control.nacp.lang[0].name;
+    for (int i = 0; !name[0] && i < 16; ++i) name = control.nacp.lang[i].name;
+    size_t j = 0;
+    for (size_t i = 0; name[i] && i < sizeof(control.nacp.lang[0].name) && j + 1 < size; ++i)
+        out[j++] = (unsigned char)name[i] < 0x20 ? ' ' : name[i];
+    /* Do not leave a truncated UTF-8 sequence at the end. */
+    size_t k = j;
+    while (k > 0 && ((unsigned char)out[k-1] & 0xC0) == 0x80) --k;
+    if (k > 0 && (unsigned char)out[k-1] >= 0xC0) {
+        unsigned char lead = (unsigned char)out[k-1];
+        size_t need = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : 2;
+        if (j - (k - 1) < need) j = k - 1;
+    }
+    out[j] = 0;
+}
+
+static void json_escape(const char *in, char *out, size_t size) {
+    size_t j = 0;
+    for (; *in && j + 2 < size; ++in) {
+        if (*in == '"' || *in == '\\') out[j++] = '\\';
+        out[j++] = *in;
+    }
+    out[j] = 0;
+}
+
+static bool send_event(Network *n, const Config *cfg, u64 title_id, bool paused, const char *title) {
     struct sockaddr_in destination = {0};
     destination.sin_family = AF_INET;
     destination.sin_port = htons((uint16_t)cfg->port);
     if (inet_pton(AF_INET, cfg->host, &destination.sin_addr) != 1) return false;
-    char packet[128];
-    int length = snprintf(packet, sizeof(packet), "{\"title_id\":\"%016llX\",\"state\":\"%s\"}",
+    char packet[900], escaped[780];
+    int length;
+    if (!paused && title_id && title && title[0]) {
+        json_escape(title, escaped, sizeof(escaped));
+        length = snprintf(packet, sizeof(packet), "{\"title_id\":\"%016llX\",\"state\":\"playing\",\"title\":\"%s\"}",
+                          (unsigned long long)title_id, escaped);
+    }
+    else
+        length = snprintf(packet, sizeof(packet), "{\"title_id\":\"%016llX\",\"state\":\"%s\"}",
                           (unsigned long long)title_id, paused ? "paused" : title_id ? "playing" : "idle");
+    if (length <= 0 || (size_t)length >= sizeof(packet)) return false;
     return sendto(n->fd, packet, (size_t)length, 0, (struct sockaddr *)&destination, sizeof(destination)) == length;
 }
 
@@ -176,6 +224,7 @@ int main(int argc, char **argv) {
     u64 last_title = UINT64_MAX, last_send_tick = 0;
     u64 discovery_tick = 0, discovery_nonce = 0, last_reply = 0, sweep_tick = 0;
     char found_host[64] = {0};
+    u64 named_title = 0;
 
     while (true) {
         Config current;
@@ -187,7 +236,7 @@ int main(int argc, char **argv) {
         bool changed = !have_config || strcmp(current.host, active.host) || current.port != active.port || current.enabled != active.enabled;
         if (changed) {
             if (have_config && active.enabled && net.registered && (!current.enabled || strcmp(current.host, active.host) || current.port != active.port))
-                send_event(&net, &active, 0, true);
+                send_event(&net, &active, 0, true, NULL);
             active = current;
             have_config = true;
             last_title = UINT64_MAX;
@@ -196,6 +245,7 @@ int main(int argc, char **argv) {
         }
         if (!active.enabled) {
             if (net.socket_ready) network_close(&net);
+            status_game[0] = 0;
             status("Presenca pausada na configuracao");
             svcSleepThread(2000000000ULL);
             continue;
@@ -282,8 +332,12 @@ int main(int argc, char **argv) {
             }
             title_id = program_id & ~0xFFFULL;
         }
+        if (title_id != named_title) {
+            read_title_name(title_id, status_game, sizeof(status_game));
+            named_title = title_id;
+        }
         if (title_id != last_title || !last_send_tick || armTicksToNs(now - last_send_tick) >= HEARTBEAT_SECONDS * 1000000000ULL) {
-            if (send_event(&net, &destination, title_id, false)) {
+            if (send_event(&net, &destination, title_id, false, status_game)) {
                 last_title = title_id;
                 last_send_tick = now;
                 char message[160];

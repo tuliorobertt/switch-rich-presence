@@ -5,7 +5,7 @@ endif
 
 export APP_TITLE := Switch Rich Presence
 export APP_AUTHOR := tuliorobert
-export APP_VERSION := 1.1.0
+export APP_VERSION := 1.2.0
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
@@ -21,7 +21,7 @@ CFLAGS    += $(INCLUDE) -D__SWITCH__
 CXXFLAGS  := $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS   := -g $(ARCH)
 LDFLAGS   = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
-LIBS      := -lnx
+LIBS      := -lnx -lm
 LIBDIRS   := $(PORTLIBS) $(LIBNX)
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))

@@ -1,0 +1,65 @@
+﻿COMO INSTALAR NO SWITCH
+=======================
+
+Requisito: Nintendo Switch com Atmosphère. Os arquivos ficam na pasta
+"switch-sd" dentro da pasta de instalação (atalho "Arquivos para o cartão SD"
+no menu Iniciar).
+
+
+OPÇÃO A - PELO APLICATIVO (recomendado)
+---------------------------------------
+1. Desligue o Switch, retire o cartão SD e coloque-o no PC.
+2. Abra o Switch Rich Presence e vá em "Instalar no Switch".
+3. Clique em "Copiar para o cartão SD..." e escolha a raiz do cartão
+   (a unidade que contém a pasta "atmosphere").
+   Sua configuração e a opção de início automático são mantidas em
+   atualizações.
+4. Ejete o cartão com segurança, coloque no Switch e ligue no Atmosphère.
+
+
+OPÇÃO B - MANUAL
+----------------
+Copie o CONTEÚDO da pasta "switch-sd" para a raiz do cartão SD,
+mesclando as pastas existentes:
+
+  switch-sd\atmosphere\contents\4200000000075250\exefs.nsp   (sysmodule)
+  switch-sd\atmosphere\contents\4200000000075250\flags\boot2.flag
+                                                  (inicia com o console)
+  switch-sd\switch\switch-richpresence\switch-richpresence.nro   (app)
+  switch-sd\config\switch-richpresence.ini        (configuração inicial)
+
+Em uma atualização, NÃO substitua config\switch-richpresence.ini se quiser
+manter o IP e a porta já configurados.
+
+
+PRIMEIRO USO NO SWITCH
+----------------------
+1. Abra o Homebrew Menu (segure R ao abrir um jogo, ou pelo Álbum) e
+   inicie "Switch Rich Presence".
+2. Pressione X para usar a busca automática do PC.
+   Se a sua rede bloquear a busca, selecione "IP do computador" e digite o
+   IP que aparece na tela inicial do companion no PC.
+3. Selecione "Testar conexão". O PC mostra o teste em "Atividade".
+4. Pressione + para salvar e - para sair. Abra um jogo: em alguns segundos
+   ele aparece no seu perfil do Discord.
+
+No app do Switch:
+  - "Sysmodule" mostra se o módulo está em execução e permite iniciá-lo ou
+    pará-lo sem reiniciar o console.
+  - "Iniciar com o console" liga ou desliga o início automático (vale a
+    partir do próximo boot).
+  - Y abre a ajuda rápida. A tela também aceita toque.
+
+
+SE ALGO DER ERRADO
+------------------
+- O Switch não encontra o PC: confirme que o companion está aberto, que os
+  dois estão na mesma rede e que o Firewall do Windows permite o aplicativo
+  em redes privadas. Redes de convidados e "isolamento de clientes" no
+  roteador bloqueiam a busca automática; use o IP manual.
+- O jogo aparece com a logo do Switch: no PC, em "Visão geral", clique em
+  "Personalizar jogo" e informe o endereço https:// de uma imagem quadrada.
+- O console não inicia depois de instalar: remova do cartão a pasta
+  atmosphere\contents\4200000000075250 e reporte o problema.
+- Para desativar só o início automático, apague o arquivo
+  atmosphere\contents\4200000000075250\flags\boot2.flag ou use o app.

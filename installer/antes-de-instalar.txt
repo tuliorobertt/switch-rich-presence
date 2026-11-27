@@ -1,0 +1,18 @@
+﻿SWITCH RICH PRESENCE
+
+Mostra no seu perfil do Discord o jogo aberto no Nintendo Switch.
+
+Como funciona
+  - No Switch roda um pequeno módulo (sysmodule) que informa o jogo aberto.
+  - Neste PC roda o companion, que recebe essa informação pela rede local
+    e a publica no Discord Desktop.
+
+O que você precisa
+  - Um Nintendo Switch com Atmosphère (custom firmware).
+  - O Discord Desktop aberto neste PC, com "Compartilhar atividade" ativado
+    nas configurações de privacidade de atividade do Discord.
+  - O Switch e o PC na mesma rede (Wi-Fi ou cabo).
+
+Este instalador coloca o companion no PC e também guarda os arquivos do
+Switch. Depois da instalação, o próprio aplicativo copia esses arquivos
+para o cartão SD do console (menu "Instalar no Switch").
